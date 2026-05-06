@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domino Double Face — Tapis</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #12131a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .square {
+            width: 120px;
+            height: 120px;
+            background-color: transparent;
+            border: 1px solid rgba(180, 180, 190, 0.35);
+            border-radius: 18px;
+            overflow: hidden;
+            cursor: grab;
+            position: relative;
+            touch-action: none;
+        }
+
+        .square:active { cursor: grabbing; }
+
+        .square svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .square.swiping-up { border-color: rgba(140, 180, 255, 0.45); }
+        .square.swiping-down { border-color: rgba(255, 180, 140, 0.45); }
+
+        .counter {
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: rgba(180, 180, 190, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="square" id="domino">
+            <svg id="dominoSvg" viewBox="0 0 90 90"></svg>
+        </div>
+        <div class="counter" id="counter"></div>
+    </div>
+
+    <script>
+        // ─── Bibliothèque de sigles (tapis infini) ───
+        const ICONS = [
+            `<path d="M 20 32 L 45 12 L 70 32"/>`,                      // chevronUp
+            `<circle cx="45" cy="22" r="12"/>`,                          // circle
+            `<circle cx="30" cy="22" r="8"/><circle cx="60" cy="22" r="8"/>`, // twoCircles
+            `<line x1="15" y1="22" x2="75" y2="22"/>`,                  // line
+            `<line x1="25" y1="10" x2="25" y2="34"/><line x1="45" y1="10" x2="45" y2="34"/><line x1="65" y1="10" x2="65" y2="34"/>`, // threeLines
+            `<path d="M 10 30 Q 28 8 45 22 Q 62 36 80 14"/>`,           // waveUp
+            `<path d="M 45 8 L 70 22 L 45 36 L 20 22 Z"/>`,            // diamond
+            `<line x1="25" y1="10" x2="65" y2="34"/><line x1="65" y1="10" x2="25" y2="34"/>`, // cross
+            `<rect x="25" y="8" width="40" height="28" rx="3"/>`,       // square
+            `<path d="M 45 8 L 70 36 L 20 36 Z"/>`,                     // triangle
+            `<path d="M 10 30 L 25 10 L 45 30 L 65 10 L 80 30"/>`,     // zigzag
+            `<path d="M 20 12 L 45 32 L 70 12"/>`,                      // chevronDown
+            `<path d="M 10 14 Q 28 36 45 22 Q 62 8 80 30"/>`,          // waveDown
+            `<circle cx="30" cy="14" r="4"/><circle cx="60" cy="14" r="4"/><circle cx="30" cy="30" r="4"/><circle cx="60" cy="30" r="4"/>`, // dots4
+            `<circle cx="45" cy="12" r="4"/><circle cx="30" cy="32" r="4"/><circle cx="60" cy="32" r="4"/>`, // threePoints
+            `<circle cx="30" cy="22" r="4"/><circle cx="60" cy="22" r="4"/>`, // twoPoints
+        ];
+
+        const TOTAL = ICONS.length;
+        const wrap = (i) => ((i % TOTAL) + TOTAL) % TOTAL;
+
+        // ─── État : le tapis est une bande verticale infinie ───
+        // On stocke l'index du sigle "top" courant. Bottom = top + 1
+        let topIdx = 0;
+
+        const svg = document.getElementById('dominoSvg');
+        const domino = document.getElementById('domino');
+        const counterEl = document.getElementById('counter');
+
+        // ─── Rendu d'une frame du tapis ───
+        // offset : 0 = repos, -1 = défilé d'un cran vers le haut, +1 = vers le bas
+        // On dessine 4 "slots" empilés : [top-1, top, top+1, top+2]
+        // Chaque slot fait 45px de haut. La bande totale = 180px.
+        // La fenêtre visible = 90px, centrée à offset 45..135 au repos.
+        // Un décalage de ±45px = un cran complet.
+
+        const SLOT = 45;
+        const ICON_AREA = 44; // zone de dessin d'un sigle
+
+        function renderFrame(offset) {
+            // offset en pixels (0 = repos, négatif = monte, positif = descend)
+            // On dessine 4 slots empilés, décalés par offset
+            const baseY = SLOT + offset; // position du haut de la fenêtre visible dans la bande
+
+            // Bande : slot 0 = topIdx-1, slot 1 = topIdx, slot 2 = topIdx+1, slot 3 = topIdx+2
+            const indices = [topIdx - 1, topIdx, topIdx + 1, topIdx + 2];
+
+            let content = `<defs><clipPath id="vis"><rect x="0" y="0" width="90" height="90"/></clipPath></defs>`;
+            content += `<g clip-path="url(#vis)">`;
+
+            for (let i = 0; i < 4; i++) {
+                const slotTop = i * SLOT - baseY;
+                const slotCenter = slotTop + SLOT / 2;
+                const iconY = slotCenter - ICON_AREA / 2;
+
+                // Opacité : plus on est loin du centre visible, plus on fade
+                const distFromCenter = Math.abs(slotCenter + baseY - 2 * SLOT) / SLOT;
+                const opacity = Math.max(0.15, 1 - distFromCenter * 0.4);
+
+                content += `<g transform="translate(0, ${iconY})" opacity="${opacity.toFixed(2)}" 
+                    style="--stroke: rgba(180,180,190,${(opacity * 0.55).toFixed(2)}); --fill: rgba(180,180,190,${(opacity * 0.55).toFixed(2)})">
+                    ${applyStyle(ICONS[wrap(indices[i])])}
+                </g>`;
+
+                // Médiane (séparateur) entre chaque slot
+                if (i < 3) {
+                    const sepY = (i + 1) * SLOT - baseY;
+                    if (sepY > -2 && sepY < 92) {
+                        const sepDist = Math.abs(sepY - 45) / 45;
+                        const sepOpacity = Math.max(0.08, 0.3 - sepDist * 0.2);
+                        content += `<line x1="8" y1="${sepY}" x2="82" y2="${sepY}" 
+                            stroke="rgba(180,180,190,${sepOpacity.toFixed(2)})" stroke-width="0.8"/>`;
+                    }
+                }
+            }
+
+            content += `</g>`;
+            svg.innerHTML = content;
+        }
+
+        function applyStyle(iconSvg) {
+            return iconSvg
+                .replace(/<(path|line|rect|polygon)/g, '<$1 stroke="rgba(180,180,190,0.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"')
+                .replace(/<circle cx/g, '<circle fill="rgba(180,180,190,0.55)" stroke="none" cx');
+        }
+
+        function updateCounter() {
+            const t = wrap(topIdx);
+            const b = wrap(topIdx + 1);
+            counterEl.textContent = `${t + 1}·${b + 1} / ${TOTAL}`;
+        }
+
+        // ─── Animation fluide ───
+        let animating = false;
+
+        function animateScroll(direction) {
+            if (animating) return;
+            animating = true;
+
+            const target = direction === 'up' ? -SLOT : SLOT;
+            const duration = 380;
+            const startTime = performance.now();
+
+            function tick(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                // Ease out cubic
+                const ease = 1 - Math.pow(1 - progress, 3);
+                const offset = target * ease;
+
+                renderFrame(offset);
+
+                if (progress < 1) {
+                    requestAnimationFrame(tick);
+                } else {
+                    // Commit le déplacement
+                    if (direction === 'up') {
+                        topIdx++;
+                    } else {
+                        topIdx--;
+                    }
+                    renderFrame(0);
+                    updateCounter();
+                    animating = false;
+                }
+            }
+
+            requestAnimationFrame(tick);
+        }
+
+        // ─── Gestion interactive : drag fluide + inertie ───
+        let startY = 0;
+        let isDragging = false;
+        let dragOffset = 0;
+        const THRESHOLD = 20;
+
+        domino.addEventListener('pointerdown', (e) => {
+            if (animating) return;
+            startY = e.clientY;
+            isDragging = true;
+            dragOffset = 0;
+            domino.setPointerCapture(e.pointerId);
+        });
+
+        domino.addEventListener('pointermove', (e) => {
+            if (!isDragging || animating) return;
+            dragOffset = e.clientY - startY;
+            // Clamp pour un feeling élastique
+            const clamped = Math.sign(dragOffset) * Math.min(Math.abs(dragOffset), SLOT * 1.2);
+
+            if (dragOffset < -5) {
+                domino.classList.add('swiping-up');
+                domino.classList.remove('swiping-down');
+            } else if (dragOffset > 5) {
+                domino.classList.add('swiping-down');
+                domino.classList.remove('swiping-up');
+            }
+
+            renderFrame(clamped);
+        });
+
+        domino.addEventListener('pointerup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            domino.classList.remove('swiping-up', 'swiping-down');
+
+            if (Math.abs(dragOffset) > THRESHOLD) {
+                // Compléter l'animation dans la direction du drag
+                const direction = dragOffset < 0 ? 'up' : 'down';
+                completeSnap(direction, dragOffset);
+            } else {
+                // Snap back
+                snapBack(dragOffset);
+            }
+        });
+
+        domino.addEventListener('pointercancel', () => {
+            isDragging = false;
+            domino.classList.remove('swiping-up', 'swiping-down');
+            snapBack(0);
+        });
+
+        function completeSnap(direction, currentOffset) {
+            animating = true;
+            const target = direction === 'up' ? -SLOT : SLOT;
+            const remaining = target - currentOffset;
+            const duration = Math.max(120, 250 * (Math.abs(remaining) / SLOT));
+            const startTime = performance.now();
+            const startOffset = currentOffset;
+
+            function tick(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const ease = 1 - Math.pow(1 - progress, 3);
+                const offset = startOffset + remaining * ease;
+
+                renderFrame(offset);
+
+                if (progress < 1) {
+                    requestAnimationFrame(tick);
+                } else {
+                    if (direction === 'up') topIdx++;
+                    else topIdx--;
+                    renderFrame(0);
+                    updateCounter();
+                    animating = false;
+                }
+            }
+
+            requestAnimationFrame(tick);
+        }
+
+        function snapBack(currentOffset) {
+            if (Math.abs(currentOffset) < 1) { renderFrame(0); return; }
+            animating = true;
+            const duration = 200;
+            const startTime = performance.now();
+
+            function tick(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const ease = 1 - Math.pow(1 - progress, 2);
+                renderFrame(currentOffset * (1 - ease));
+
+                if (progress < 1) {
+                    requestAnimationFrame(tick);
+                } else {
+                    renderFrame(0);
+                    animating = false;
+                }
+            }
+
+            requestAnimationFrame(tick);
+        }
+
+        // Scroll wheel
+        domino.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY > 0) animateScroll('up');
+            else if (e.deltaY < 0) animateScroll('down');
+        }, { passive: false });
+
+        // ─── Init ───
+        renderFrame(0);
+        updateCounter();
+    </script>
+</body>
+</html>
