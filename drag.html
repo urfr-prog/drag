@@ -37,6 +37,7 @@
             cursor: grab;
             position: relative;
             touch-action: none;
+            transition: transform 400ms cubic-bezier(0.25, 0.1, 0.25, 1);
         }
 
         .square:active { cursor: grabbing; }
@@ -90,58 +91,76 @@
         const TOTAL = ICONS.length;
         const wrap = (i) => ((i % TOTAL) + TOTAL) % TOTAL;
 
-        // ─── État : le tapis est une bande verticale infinie ───
-        // On stocke l'index du sigle "top" courant. Bottom = top + 1
+        const SLOT = 45;
+        const ICON_AREA = 44;
+        const STEP_GESTURE = SLOT / 2;       // distance de geste pour 1 cran logique
+        const VISUAL_RATIO = SLOT / STEP_GESTURE; // = 2 : la bande défile 2x plus que le doigt
+
+        // topIdx : index entier du sigle "top" affiché au repos
+        // bandY : position visuelle continue de la bande (en px). Au repos = topIdx * SLOT.
+        // Le sigle k de la bande est affiché à y = k*SLOT - bandY dans la fenêtre.
         let topIdx = 0;
+        let bandY = 0;
+
+        // Rotation (multiple de 90°). 0 = vertical normal, 90/180/270 = tournés.
+        let rotation = 0;
 
         const svg = document.getElementById('dominoSvg');
         const domino = document.getElementById('domino');
         const counterEl = document.getElementById('counter');
 
-        // ─── Rendu d'une frame du tapis ───
-        // offset : 0 = repos, -1 = défilé d'un cran vers le haut, +1 = vers le bas
-        // On dessine 4 "slots" empilés : [top-1, top, top+1, top+2]
-        // Chaque slot fait 45px de haut. La bande totale = 180px.
-        // La fenêtre visible = 90px, centrée à offset 45..135 au repos.
-        // Un décalage de ±45px = un cran complet.
+        // Selon la rotation (sens horaire), l'axe de drag change.
+        // "Avancer dans la séquence" = doigt va dans la direction où la bande se déplace.
+        // À 0°   (haut en haut)    : avancer = doigt monte (dy<0). delta = dy.
+        // À 90°  (haut à droite)   : avancer = doigt à droite (dx>0). delta = -dx.
+        // À 180° (haut en bas)     : avancer = doigt descend (dy>0). delta = -dy.
+        // À 270° (haut à gauche)   : avancer = doigt à gauche (dx<0). delta = dx.
+        // Note : delta < 0 = avancer (cohérent avec la logique d'origine où dy<0 = avancer)
+        function getDragDelta(dx, dy) {
+            switch (((rotation % 360) + 360) % 360) {
+                case 0:   return dy;
+                case 90:  return -dx;
+                case 180: return -dy;
+                case 270: return dx;
+                default:  return dy;
+            }
+        }
 
-        const SLOT = 45;
-        const ICON_AREA = 44; // zone de dessin d'un sigle
+        // ─── Rendu ───
+        // Le sigle k est affiché à y = k*SLOT - bandY
+        // À bandY = topIdx * SLOT : sigle topIdx en haut (y=0), sigle topIdx+1 en bas (y=SLOT). Médiane au centre.
+        const SLOT_HEIGHT = SLOT;
+        const ICON_HEIGHT = ICON_AREA;
 
-        function renderFrame(offset) {
-            // offset en pixels (0 = repos, négatif = monte, positif = descend)
-            // On dessine 4 slots empilés, décalés par offset
-            const baseY = SLOT + offset; // position du haut de la fenêtre visible dans la bande
-
-            // Bande : slot 0 = topIdx-1, slot 1 = topIdx, slot 2 = topIdx+1, slot 3 = topIdx+2
-            const indices = [topIdx - 1, topIdx, topIdx + 1, topIdx + 2];
+        function renderFrame() {
+            // Quels sigles dessiner ? On veut couvrir y ∈ [-SLOT, 90+SLOT]
+            const kMin = Math.floor((bandY - SLOT) / SLOT);
+            const kMax = Math.ceil((bandY + 90 + SLOT) / SLOT);
 
             let content = `<defs><clipPath id="vis"><rect x="0" y="0" width="90" height="90"/></clipPath></defs>`;
             content += `<g clip-path="url(#vis)">`;
 
-            for (let i = 0; i < 4; i++) {
-                const slotTop = i * SLOT - baseY;
+            for (let k = kMin; k <= kMax; k++) {
+                const slotTop = k * SLOT - bandY;
                 const slotCenter = slotTop + SLOT / 2;
                 const iconY = slotCenter - ICON_AREA / 2;
 
-                // Opacité : plus on est loin du centre visible, plus on fade
-                const distFromCenter = Math.abs(slotCenter + baseY - 2 * SLOT) / SLOT;
+                if (slotTop > 95 || slotTop + SLOT < -5) continue;
+
+                const distFromCenter = Math.abs(slotCenter - 45) / SLOT;
                 const opacity = Math.max(0.15, 1 - distFromCenter * 0.4);
 
-                content += `<g transform="translate(0, ${iconY})" opacity="${opacity.toFixed(2)}" 
-                    style="--stroke: rgba(180,180,190,${(opacity * 0.55).toFixed(2)}); --fill: rgba(180,180,190,${(opacity * 0.55).toFixed(2)})">
-                    ${applyStyle(ICONS[wrap(indices[i])])}
+                content += `<g transform="translate(0, ${iconY.toFixed(2)})" opacity="${opacity.toFixed(2)}">
+                    ${applyStyle(ICONS[wrap(k)])}
                 </g>`;
 
-                // Médiane (séparateur) entre chaque slot
-                if (i < 3) {
-                    const sepY = (i + 1) * SLOT - baseY;
-                    if (sepY > -2 && sepY < 92) {
-                        const sepDist = Math.abs(sepY - 45) / 45;
-                        const sepOpacity = Math.max(0.08, 0.3 - sepDist * 0.2);
-                        content += `<line x1="8" y1="${sepY}" x2="82" y2="${sepY}" 
-                            stroke="rgba(180,180,190,${sepOpacity.toFixed(2)})" stroke-width="0.8"/>`;
-                    }
+                // Médiane en bas du slot k
+                const sepY = slotTop + SLOT;
+                if (sepY > -2 && sepY < 92) {
+                    const sepDist = Math.abs(sepY - 45) / 45;
+                    const sepOpacity = Math.max(0.08, 0.3 - sepDist * 0.2);
+                    content += `<line x1="8" y1="${sepY.toFixed(2)}" x2="82" y2="${sepY.toFixed(2)}" 
+                        stroke="rgba(180,180,190,${sepOpacity.toFixed(2)})" stroke-width="0.8"/>`;
                 }
             }
 
@@ -161,36 +180,29 @@
             counterEl.textContent = `${t + 1}·${b + 1} / ${TOTAL}`;
         }
 
-        // ─── Animation fluide ───
+        // ─── Animation ───
         let animating = false;
 
-        function animateScroll(direction) {
+        function animateBandY(targetBandY, duration) {
             if (animating) return;
             animating = true;
-
-            const target = direction === 'up' ? -SLOT : SLOT;
-            const duration = 380;
+            const startBandY = bandY;
+            const delta = targetBandY - startBandY;
             const startTime = performance.now();
 
             function tick(now) {
                 const elapsed = now - startTime;
                 const progress = Math.min(elapsed / duration, 1);
-                // Ease out cubic
                 const ease = 1 - Math.pow(1 - progress, 3);
-                const offset = target * ease;
-
-                renderFrame(offset);
+                bandY = startBandY + delta * ease;
+                renderFrame();
 
                 if (progress < 1) {
                     requestAnimationFrame(tick);
                 } else {
-                    // Commit le déplacement
-                    if (direction === 'up') {
-                        topIdx++;
-                    } else {
-                        topIdx--;
-                    }
-                    renderFrame(0);
+                    bandY = targetBandY;          // garantie : pile sur la cible
+                    topIdx = Math.round(bandY / SLOT);
+                    renderFrame();
                     updateCounter();
                     animating = false;
                 }
@@ -199,35 +211,51 @@
             requestAnimationFrame(tick);
         }
 
-        // ─── Gestion interactive : drag fluide + inertie ───
-        let startY = 0;
+        function animateScroll(direction) {
+            if (animating) return;
+            const targetTopIdx = topIdx + (direction === 'up' ? 1 : -1);
+            animateBandY(targetTopIdx * SLOT, 280);
+        }
+
+        // ─── Drag + clic ───
+        let startX = 0, startY = 0;
+        let bandYAtDragStart = 0;
         let isDragging = false;
-        let dragOffset = 0;
-        const THRESHOLD = 20;
+        let totalMovement = 0; // pour distinguer clic vs drag
+        const CLICK_THRESHOLD = 5; // px
 
         domino.addEventListener('pointerdown', (e) => {
             if (animating) return;
+            startX = e.clientX;
             startY = e.clientY;
+            bandYAtDragStart = bandY;
             isDragging = true;
-            dragOffset = 0;
+            totalMovement = 0;
             domino.setPointerCapture(e.pointerId);
         });
 
         domino.addEventListener('pointermove', (e) => {
             if (!isDragging || animating) return;
-            dragOffset = e.clientY - startY;
-            // Clamp pour un feeling élastique
-            const clamped = Math.sign(dragOffset) * Math.min(Math.abs(dragOffset), SLOT * 1.2);
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            totalMovement = Math.max(totalMovement, Math.hypot(dx, dy));
 
-            if (dragOffset < -5) {
+            const delta = getDragDelta(dx, dy);
+            // delta < 0 = avancer (bandY augmente)
+            bandY = bandYAtDragStart - delta * VISUAL_RATIO;
+
+            const drift = bandY - bandYAtDragStart;
+            if (drift > 2) {
                 domino.classList.add('swiping-up');
                 domino.classList.remove('swiping-down');
-            } else if (dragOffset > 5) {
+            } else if (drift < -2) {
                 domino.classList.add('swiping-down');
                 domino.classList.remove('swiping-up');
+            } else {
+                domino.classList.remove('swiping-up', 'swiping-down');
             }
 
-            renderFrame(clamped);
+            renderFrame();
         });
 
         domino.addEventListener('pointerup', (e) => {
@@ -235,73 +263,39 @@
             isDragging = false;
             domino.classList.remove('swiping-up', 'swiping-down');
 
-            if (Math.abs(dragOffset) > THRESHOLD) {
-                // Compléter l'animation dans la direction du drag
-                const direction = dragOffset < 0 ? 'up' : 'down';
-                completeSnap(direction, dragOffset);
+            if (totalMovement < CLICK_THRESHOLD) {
+                // Clic : rotation +90°
+                rotation += 90;
+                domino.style.transform = `rotate(${rotation}deg)`;
             } else {
-                // Snap back
-                snapBack(dragOffset);
+                snapToNearest();
             }
         });
 
         domino.addEventListener('pointercancel', () => {
+            if (!isDragging) return;
             isDragging = false;
             domino.classList.remove('swiping-up', 'swiping-down');
-            snapBack(0);
+            snapToNearest();
         });
 
-        function completeSnap(direction, currentOffset) {
-            animating = true;
-            const target = direction === 'up' ? -SLOT : SLOT;
-            const remaining = target - currentOffset;
-            const duration = Math.max(120, 250 * (Math.abs(remaining) / SLOT));
-            const startTime = performance.now();
-            const startOffset = currentOffset;
+        function snapToNearest() {
+            // Le SLOT le plus proche en termes de bandY
+            const targetTopIdx = Math.round(bandY / SLOT);
+            const targetBandY = targetTopIdx * SLOT;
+            const distance = Math.abs(targetBandY - bandY);
 
-            function tick(now) {
-                const elapsed = now - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const ease = 1 - Math.pow(1 - progress, 3);
-                const offset = startOffset + remaining * ease;
-
-                renderFrame(offset);
-
-                if (progress < 1) {
-                    requestAnimationFrame(tick);
-                } else {
-                    if (direction === 'up') topIdx++;
-                    else topIdx--;
-                    renderFrame(0);
-                    updateCounter();
-                    animating = false;
-                }
+            if (distance < 0.5) {
+                bandY = targetBandY;
+                topIdx = targetTopIdx;
+                renderFrame();
+                updateCounter();
+                return;
             }
 
-            requestAnimationFrame(tick);
-        }
-
-        function snapBack(currentOffset) {
-            if (Math.abs(currentOffset) < 1) { renderFrame(0); return; }
-            animating = true;
-            const duration = 200;
-            const startTime = performance.now();
-
-            function tick(now) {
-                const elapsed = now - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const ease = 1 - Math.pow(1 - progress, 2);
-                renderFrame(currentOffset * (1 - ease));
-
-                if (progress < 1) {
-                    requestAnimationFrame(tick);
-                } else {
-                    renderFrame(0);
-                    animating = false;
-                }
-            }
-
-            requestAnimationFrame(tick);
+            // Durée proportionnelle, plus rapide quand on est presque au snap
+            const duration = Math.max(80, 220 * (distance / SLOT));
+            animateBandY(targetBandY, duration);
         }
 
         // Scroll wheel
@@ -312,7 +306,7 @@
         }, { passive: false });
 
         // ─── Init ───
-        renderFrame(0);
+        renderFrame();
         updateCounter();
     </script>
 </body>
