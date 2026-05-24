@@ -1,313 +1,682 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Domino Double Face — Tapis</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ADAM Grid 6×4 – v14 Fusion Dominos</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0e14;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    min-height: 100vh;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: rgba(220,220,235,0.9);
+    touch-action: none; user-select: none;
+  }
+  .info-bar {
+    display: flex; gap: 16px; margin-bottom: 12px;
+    font-size: 0.65rem; color: rgba(180,180,200,0.5); letter-spacing: 0.1em;
+  }
+  .info-bar span { color: rgba(220,220,235,0.8); }
+  .grid-wrap {
+    position: relative;
+    width: calc(90px * 4 + 4px * 3);
+    height: calc(90px * 6 + 4px * 5);
+  }
+  .cell { position: absolute; width: 90px; height: 90px; }
+  .square {
+    width: 100%; height: 100%; border-radius: 10px;
+    border: 1.5px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; cursor: pointer; overflow: hidden;
+  }
+  .square.empty {
+    border: 1px dashed rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.01); cursor: default;
+  }
+  .square svg { width: 100%; height: 100%; pointer-events: none; }
+  svg .separator { stroke-width: 1; }
+  svg line.icon, svg path.icon, svg circle.icon, svg rect.icon {
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none;
+  }
 
-        body {
-            background-color: #12131a;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            overflow: hidden;
-            user-select: none;
-            -webkit-user-select: none;
-        }
+  /* === ÉTATS === */
+  .square.white { border-color: rgba(180,180,190,0.25); background: rgba(180,180,190,0.03); }
+  .square.white svg line.icon, .square.white svg path.icon, .square.white svg circle.icon, .square.white svg rect.icon { stroke: rgba(180,180,190,0.35); }
+  .square.white svg circle.point { fill: rgba(180,180,190,0.35); }
+  .square.white svg .separator { stroke: rgba(180,180,190,0.2); }
+  .square.white svg circle.tip { fill: rgba(180,180,190,0.5); }
 
-        .container {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 32px;
-        }
+  .square.silver { border-color: rgba(6,182,212,0.6); background: rgba(6,182,212,0.03); box-shadow: 0 0 12px rgba(6,182,212,0.2); }
+  .square.silver svg line.icon, .square.silver svg path.icon, .square.silver svg circle.icon, .square.silver svg rect.icon { stroke: #22d3ee; filter: drop-shadow(0 0 2px rgba(34,211,238,0.4)); }
+  .square.silver svg circle.point { fill: #22d3ee; }
+  .square.silver svg .separator { stroke: rgba(34,211,238,0.3); }
+  .square.silver svg circle.tip { fill: #22d3ee; }
 
-        .square {
-            width: 120px;
-            height: 120px;
-            background-color: transparent;
-            border: 1px solid rgba(180, 180, 190, 0.35);
-            border-radius: 18px;
-            overflow: hidden;
-            cursor: grab;
-            position: relative;
-            touch-action: none;
-            transition: transform 400ms cubic-bezier(0.25, 0.1, 0.25, 1);
-        }
+  .square.gold { border-color: rgba(255,215,0,0.7); background: rgba(255,215,0,0.03); box-shadow: 0 0 20px rgba(255,215,0,0.2); }
+  .square.gold svg line.icon, .square.gold svg path.icon, .square.gold svg circle.icon, .square.gold svg rect.icon { stroke: #ffd700; filter: drop-shadow(0 0 3px rgba(255,215,0,0.5)); }
+  .square.gold svg circle.point { fill: #ffd700; }
+  .square.gold svg .separator { stroke: rgba(255,215,0,0.3); }
+  .square.gold svg circle.tip { fill: #ffd700; }
 
-        .square:active { cursor: grabbing; }
+  .square.emerald { border-color: rgba(52,211,153,0.8); background: rgba(52,211,153,0.04); box-shadow: 0 0 25px rgba(5,150,105,0.3); animation: emeraldGlow 2.5s ease-in-out infinite; }
+  .square.emerald svg line.icon, .square.emerald svg path.icon, .square.emerald svg circle.icon, .square.emerald svg rect.icon { stroke: #34d399; filter: drop-shadow(0 0 5px rgba(52,211,153,0.7)); }
+  .square.emerald svg circle.point { fill: #34d399; }
+  .square.emerald svg .separator { stroke: rgba(52,211,153,0.4); }
+  .square.emerald svg circle.tip { fill: #34d399; }
+  @keyframes emeraldGlow {
+    0%,100% { box-shadow: 0 0 25px rgba(5,150,105,0.3); }
+    50% { box-shadow: 0 0 35px rgba(5,150,105,0.5); }
+  }
 
-        .square svg {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
+  .square.cosmic { border: 2px solid transparent; background: linear-gradient(#0a0e14, #0a0e14) padding-box, conic-gradient(from var(--cosmic-angle, 0deg), #ff006e, #8338ec, #06b6d4, #34d399, #ffd700, #ff006e) border-box; box-shadow: 0 0 25px rgba(131,56,236,0.4); animation: cosmicRotate 4s linear infinite; }
+  .square.cosmic svg line.icon, .square.cosmic svg path.icon, .square.cosmic svg circle.icon, .square.cosmic svg rect.icon { stroke: #c4b5fd; filter: drop-shadow(0 0 5px rgba(131,56,236,0.6)); animation: cosmicIconShift 3s ease-in-out infinite; }
+  .square.cosmic svg circle.point { fill: #c4b5fd; animation: cosmicPointPulse 1.5s ease-in-out infinite; }
+  .square.cosmic svg .separator { stroke: rgba(196,181,253,0.5); }
+  .square.cosmic svg circle.tip { fill: #c4b5fd; }
+  @property --cosmic-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @keyframes cosmicRotate { to { --cosmic-angle: 360deg; } }
+  @keyframes cosmicIconShift { 0%,100% { stroke: #c4b5fd; } 33% { stroke: #22d3ee; } 66% { stroke: #f472b6; } }
+  @keyframes cosmicPointPulse { 0%,100% { fill: #c4b5fd; } 50% { fill: #f472b6; } }
 
-        .square.swiping-up { border-color: rgba(140, 180, 255, 0.45); }
-        .square.swiping-down { border-color: rgba(255, 180, 140, 0.45); }
+  .square.supernovae { border: 3px solid transparent; background: linear-gradient(#0a0e14, #0a0e14) padding-box, conic-gradient(from var(--supernova-angle, 0deg), #ff4500, #ff8c00, #ffd700, #ffff00, #ff8c00, #ff4500) border-box; box-shadow: 0 0 25px rgba(255,140,0,0.4); animation: supernovaRotate 3s linear infinite; }
+  .square.supernovae svg line.icon, .square.supernovae svg path.icon, .square.supernovae svg circle.icon, .square.supernovae svg rect.icon { stroke: #ffeb3b; filter: drop-shadow(0 0 5px rgba(255,215,0,0.6)); animation: supernovaIconShift 2.5s ease-in-out infinite; }
+  .square.supernovae svg circle.point { fill: #ffeb3b; animation: supernovaPointPulse 1.2s ease-in-out infinite; }
+  .square.supernovae svg .separator { stroke: rgba(255,235,59,0.5); }
+  .square.supernovae svg circle.tip { fill: #ffeb3b; }
+  @property --supernova-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @keyframes supernovaRotate { to { --supernova-angle: 360deg; } }
+  @keyframes supernovaIconShift { 0%,100% { stroke: #ffeb3b; } 25% { stroke: #ff8c00; } 50% { stroke: #ffd700; } 75% { stroke: #ff6347; } }
+  @keyframes supernovaPointPulse { 0%,100% { fill: #ffeb3b; } 33% { fill: #ff8c00; } 66% { fill: #ffd700; } }
 
-        .counter {
-            font-size: 11px;
-            letter-spacing: 2px;
-            color: rgba(180, 180, 190, 0.2);
-        }
-    </style>
+  .square.plasma { border-color: rgba(255,32,96,0.55); background: rgba(255,20,80,0.04); box-shadow: 0 0 16px rgba(255,32,96,0.2); animation: pp 1.8s ease-in-out infinite; }
+  .square.plasma svg line.icon, .square.plasma svg path.icon, .square.plasma svg circle.icon, .square.plasma svg rect.icon { stroke: #ff2060; filter: drop-shadow(0 0 4px rgba(255,32,96,0.7)); }
+  .square.plasma svg circle.point { fill: #ff2060; }
+  .square.plasma svg .separator { stroke: rgba(255,32,96,0.4); }
+  .square.plasma svg circle.tip { fill: #ff2060; }
+  @keyframes pp { 0%,100%{box-shadow:0 0 16px rgba(255,32,96,0.2)} 50%{box-shadow:0 0 28px rgba(255,32,96,0.5)} }
+
+  /* Fusion animations */
+  .square.fusing { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease; }
+  .square.fused-result { animation: fusionAppear 0.5s cubic-bezier(0.2, 0, 0.2, 1); }
+  @keyframes fusionAppear {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;
+    font-size: 0.55rem; color: rgba(180,180,200,0.5);
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02);
+  }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: rgba(22,23,38,0.95); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px; padding: 8px 16px; font-size: 0.7rem;
+    transition: transform 0.25s ease-out; z-index: 300; pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  button.reset-btn {
+    margin-top: 10px; padding: 6px 18px; border-radius: 7px;
+    border: 1px solid rgba(34,211,238,0.4); background: rgba(34,211,238,0.08);
+    color: #22d3ee; font-family: inherit; font-size: 0.6rem;
+    letter-spacing: 0.1em; cursor: pointer; transition: all 0.15s;
+  }
+  button.reset-btn:hover { background: rgba(34,211,238,0.18); border-color: #22d3ee; }
+</style>
 </head>
 <body>
 
-    <div class="container">
-        <div class="square" id="domino">
-            <svg id="dominoSvg" viewBox="0 0 90 90"></svg>
-        </div>
-        <div class="counter" id="counter"></div>
-    </div>
+<div class="info-bar">
+  <div>Coups: <span id="stat-moves">0</span></div>
+  <div>Pièces: <span id="stat-pieces">0</span></div>
+  <div>4 × 6</div>
+</div>
+<div class="grid-wrap"><div id="grid"></div></div>
+<button class="reset-btn" onclick="resetAll()">↺ Reset</button>
+<div class="legend" id="legend"></div>
+<div class="toast" id="toast"></div>
 
-    <script>
-        // ─── Bibliothèque de sigles (tapis infini) ───
-        const ICONS = [
-            `<path d="M 20 32 L 45 12 L 70 32"/>`,                      // chevronUp
-            `<circle cx="45" cy="22" r="12"/>`,                          // circle
-            `<circle cx="30" cy="22" r="8"/><circle cx="60" cy="22" r="8"/>`, // twoCircles
-            `<line x1="15" y1="22" x2="75" y2="22"/>`,                  // line
-            `<line x1="25" y1="10" x2="25" y2="34"/><line x1="45" y1="10" x2="45" y2="34"/><line x1="65" y1="10" x2="65" y2="34"/>`, // threeLines
-            `<path d="M 10 30 Q 28 8 45 22 Q 62 36 80 14"/>`,           // waveUp
-            `<path d="M 45 8 L 70 22 L 45 36 L 20 22 Z"/>`,            // diamond
-            `<line x1="25" y1="10" x2="65" y2="34"/><line x1="65" y1="10" x2="25" y2="34"/>`, // cross
-            `<rect x="25" y="8" width="40" height="28" rx="3"/>`,       // square
-            `<path d="M 45 8 L 70 36 L 20 36 Z"/>`,                     // triangle
-            `<path d="M 10 30 L 25 10 L 45 30 L 65 10 L 80 30"/>`,     // zigzag
-            `<path d="M 20 12 L 45 32 L 70 12"/>`,                      // chevronDown
-            `<path d="M 10 14 Q 28 36 45 22 Q 62 8 80 30"/>`,          // waveDown
-            `<circle cx="30" cy="14" r="4"/><circle cx="60" cy="14" r="4"/><circle cx="30" cy="30" r="4"/><circle cx="60" cy="30" r="4"/>`, // dots4
-            `<circle cx="45" cy="12" r="4"/><circle cx="30" cy="32" r="4"/><circle cx="60" cy="32" r="4"/>`, // threePoints
-            `<circle cx="30" cy="22" r="4"/><circle cx="60" cy="22" r="4"/>`, // twoPoints
-        ];
+<script>
+const COLS = 4, ROWS = 6, TOTAL = 24;
+const CELL = 90, GAP = 4, CT = CELL + GAP;
 
-        const TOTAL = ICONS.length;
-        const wrap = (i) => ((i % TOTAL) + TOTAL) % TOTAL;
+// =============================================
+// DOMINOS : chaque pièce a face1 (haut) + face2 (bas) + rotation
+// Les icônes viennent du layer v3 — viewBox 0 0 90 90
+// Face1 = moitié haute (0-45), Face2 = moitié basse (45-90 → translate 0,45)
+// =============================================
 
-        const SLOT = 45;
-        const ICON_AREA = 44;
-        const STEP_GESTURE = SLOT / 2;       // distance de geste pour 1 cran logique
-        const VISUAL_RATIO = SLOT / STEP_GESTURE; // = 2 : la bande défile 2x plus que le doigt
+const ICONS = {
+  // Domino 1 : target (cercle + point) + halfCircle (arc bas)
+  targetHalf: {
+    f1: '<circle class="icon" cx="45" cy="22" r="12"/><circle class="point" cx="45" cy="22" r="4"/>',
+    f2: '<path class="icon" d="M20 14Q45 36 70 14"/>',
+    tipY1: 10, // pointe face1 = vers le haut du cercle
+    tipY2: 36, // pointe face2 = vers le bas de l'arc
+  },
+  // Domino 2 : chevron + line
+  chevronLine: {
+    f1: '<path class="icon" d="M20 32 L45 12 L70 32"/>',
+    f2: '<line class="icon" x1="15" y1="22" x2="75" y2="22"/>',
+    tipY1: 10, // pointe du chevron vers le haut
+    tipY2: 22, // ligne = neutre (centre)
+  },
+  // Domino 3 : twoPoints + square (rectangle)
+  twoPointsSquare: {
+    f1: '<circle class="point" cx="33" cy="22" r="4.5"/><circle class="point" cx="57" cy="22" r="4.5"/>',
+    f2: '<rect class="icon" x="27" y="12" width="36" height="20" rx="3"/>',
+    tipY1: 17, // points = vers le haut
+    tipY2: 32, // carré = vers le bas
+  },
+  // Domino 4 : threePoints + hexagon
+  threePointsHex: {
+    f1: '<circle class="point" cx="30" cy="22" r="4"/><circle class="point" cx="45" cy="22" r="4"/><circle class="point" cx="60" cy="22" r="4"/>',
+    f2: '<path class="icon" d="M35 10L55 10L65 22L55 34L35 34L25 22Z"/>',
+    tipY1: 18, // points vers le haut
+    tipY2: 34, // hex vers le bas
+  },
+};
 
-        // topIdx : index entier du sigle "top" affiché au repos
-        // bandY : position visuelle continue de la bande (en px). Au repos = topIdx * SLOT.
-        // Le sigle k de la bande est affiché à y = k*SLOT - bandY dans la fenêtre.
-        let topIdx = 0;
-        let bandY = 0;
+// La pointe naturelle (rotation 0) : face1 pointe vers le HAUT (dy=-1)
+// La rotation tourne le domino, donc la pointe tourne avec
+const TIP_NATURAL_DIR = { dx: 0, dy: -1 }; // Tous les dominos : face1 pointe vers le haut
 
-        // Rotation (multiple de 90°). 0 = vertical normal, 90/180/270 = tournés.
-        let rotation = 0;
+const STATE_ORDER = ['white','silver','gold','emerald','cosmic','supernovae','plasma'];
 
-        const svg = document.getElementById('dominoSvg');
-        const domino = document.getElementById('domino');
-        const counterEl = document.getElementById('counter');
+const MOVE_DIRS = {
+  white: null,
+  silver: [[1,0],[-1,0]],
+  gold: [[1,1],[1,-1],[-1,1],[-1,-1]],
+  emerald: [[0,1],[0,-1]],
+  cosmic: [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]],
+  supernovae: [[1,0],[-1,0],[0,1],[0,-1]],
+  plasma: [[1,0],[-1,0],[0,1],[0,-1]],
+};
 
-        // Selon la rotation (sens horaire), l'axe de drag change.
-        // "Avancer dans la séquence" = doigt va dans la direction où la bande se déplace.
-        // À 0°   (haut en haut)    : avancer = doigt monte (dy<0). delta = dy.
-        // À 90°  (haut à droite)   : avancer = doigt à droite (dx>0). delta = -dx.
-        // À 180° (haut en bas)     : avancer = doigt descend (dy>0). delta = -dy.
-        // À 270° (haut à gauche)   : avancer = doigt à gauche (dx<0). delta = dx.
-        // Note : delta < 0 = avancer (cohérent avec la logique d'origine où dy<0 = avancer)
-        function getDragDelta(dx, dy) {
-            switch (((rotation % 360) + 360) % 360) {
-                case 0:   return dy;
-                case 90:  return -dx;
-                case 180: return -dy;
-                case 270: return dx;
-                default:  return dy;
-            }
+// 8 pièces — 4 paires, mêmes positions et états que v12
+let pieces, moves;
+const DEMO = [
+  [1,  'white',      'targetHalf'],
+  [4,  'emerald',    'targetHalf'],
+  [6,  'gold',       'chevronLine'],
+  [9,  'white',      'chevronLine'],
+  [10, 'cosmic',     'twoPointsSquare'],
+  [13, 'supernovae', 'twoPointsSquare'],
+  [17, 'plasma',     'threePointsHex'],
+  [21, 'silver',     'threePointsHex'],
+];
+
+function resetAll() {
+  pieces = new Array(TOTAL).fill(null);
+  for (const [idx, state, icon] of DEMO) pieces[idx] = { state, icon, rotation: 0 };
+  moves = 0;
+  render();
+}
+
+// === HELPERS ===
+function getPos(i) { return { x: i % COLS, y: Math.floor(i / COLS) }; }
+function getIdx(x, y) { return (x<0||x>=COLS||y<0||y>=ROWS) ? -1 : y*COLS+x; }
+function canMove(p) { return p && p.state !== 'white'; }
+
+function cardinalNeighbors(idx) {
+  const res = [];
+  if (idx >= COLS) res.push(idx - COLS);
+  if (idx + COLS < TOTAL) res.push(idx + COLS);
+  if (idx % COLS > 0) res.push(idx - 1);
+  if (idx % COLS < COLS - 1) res.push(idx + 1);
+  return res;
+}
+
+function validSwapTargets(srcIdx) {
+  const p = pieces[srcIdx];
+  if (!canMove(p)) return [];
+  const dirs = MOVE_DIRS[p.state];
+  if (!dirs) return [];
+  const { x, y } = getPos(srcIdx);
+  const nb = [];
+  const blockSame = (p.state==='silver'||p.state==='gold'||p.state==='emerald');
+  for (const [dx, dy] of dirs) {
+    const ni = getIdx(x+dx, y+dy);
+    if (ni === -1) continue;
+    if (blockSame && pieces[ni] && pieces[ni].state === p.state) continue;
+    nb.push({ ni, dx, dy });
+  }
+  return nb;
+}
+
+// === TIP DIRECTION ===
+// Face1 pointe vers le haut à rotation 0
+// La rotation du domino change la direction de la pointe
+function getTipDirection(idx) {
+  const p = pieces[idx];
+  if (!p) return null;
+  const rot = ((p.rotation % 360) + 360) % 360;
+  // rotation 0: face1=haut → pointe haut (0,-1)
+  // rotation 90: face1=droite → pointe droite (1,0)
+  // rotation 180: face1=bas → pointe bas (0,1)
+  // rotation 270: face1=gauche → pointe gauche (-1,0)
+  if (rot === 0) return { dx: 0, dy: -1 };
+  if (rot === 90) return { dx: 1, dy: 0 };
+  if (rot === 180) return { dx: 0, dy: 1 };
+  if (rot === 270) return { dx: -1, dy: 0 };
+  // Fallback pour angles intermédiaires
+  const rad = rot * Math.PI / 180;
+  return { dx: Math.round(Math.sin(rad)), dy: Math.round(-Math.cos(rad)) };
+}
+
+// === FUSION ===
+function checkFusions() {
+  if (busy) return;
+  for (let i = 0; i < TOTAL; i++) {
+    if (!pieces[i]) continue;
+    const p1 = pieces[i];
+    const tip1 = getTipDirection(i);
+    if (!tip1) continue;
+    const pos1 = getPos(i);
+
+    const ni = getIdx(pos1.x + tip1.dx, pos1.y + tip1.dy);
+    if (ni === -1 || !pieces[ni]) continue;
+    const p2 = pieces[ni];
+    if (p2.icon !== p1.icon) continue;
+
+    const tip2 = getTipDirection(ni);
+    if (!tip2) continue;
+
+    if (tip2.dx === -tip1.dx && tip2.dy === -tip1.dy) {
+      performFusion(i, ni);
+      return;
+    }
+  }
+}
+
+function performFusion(idx1, idx2) {
+  busy = true;
+  const p1 = pieces[idx1], p2 = pieces[idx2];
+  const el1 = document.querySelector('.cell [data-index="'+idx1+'"]');
+  const el2 = document.querySelector('.cell [data-index="'+idx2+'"]');
+  if (!el1 || !el2) { busy = false; return; }
+
+  const rank1 = STATE_ORDER.indexOf(p1.state);
+  const rank2 = STATE_ORDER.indexOf(p2.state);
+  const newState = STATE_ORDER[Math.max(rank1, rank2)];
+
+  const pos1 = getPos(idx1), pos2 = getPos(idx2);
+  const fdx = (pos2.x - pos1.x) * 25;
+  const fdy = (pos2.y - pos1.y) * 25;
+  const r1 = p1.rotation, r2 = p2.rotation;
+
+  el1.classList.add('fusing');
+  el2.classList.add('fusing');
+  el1.style.transform = 'rotate('+r1+'deg) translate('+fdx+'px, '+fdy+'px) scale(0.7)';
+  el2.style.transform = 'rotate('+r2+'deg) translate('+(-fdx)+'px, '+(-fdy)+'px) scale(0.7)';
+
+  setTimeout(function() {
+    el1.style.opacity = '0';
+    el2.style.opacity = '0';
+
+    setTimeout(function() {
+      pieces[idx1] = { state: newState, icon: p1.icon, rotation: r1 };
+      pieces[idx2] = null;
+
+      render();
+      showToast('Fusion ! → ' + newState);
+
+      var newEl = document.querySelector('.cell [data-index="'+idx1+'"]');
+      if (newEl) newEl.classList.add('fused-result');
+
+      setTimeout(function() {
+        busy = false;
+        checkFusions();
+      }, 500);
+    }, 300);
+  }, 400);
+}
+
+// === SWAP ===
+function executeSwap(srcIdx, ni, dx, dy) {
+  const st = pieces[srcIdx]?.state;
+
+  if (st === 'supernovae') {
+    if (pieces[ni]) {
+      const chain = [ni];
+      let cx = getPos(ni).x, cy = getPos(ni).y;
+      while (true) { cx+=dx; cy+=dy; const next=getIdx(cx,cy); if(next===-1||!pieces[next])break; chain.push(next); }
+      const lp = getPos(chain[chain.length-1]);
+      if (getIdx(lp.x+dx, lp.y+dy) === -1) { showToast('Nova bloqué !'); return false; }
+      for (let i = chain.length-1; i >= 0; i--) { const from=chain[i],fp=getPos(from); const toI=getIdx(fp.x+dx,fp.y+dy); pieces[toI]=pieces[from]; pieces[from]=null; }
+    }
+    pieces[ni] = pieces[srcIdx]; pieces[srcIdx] = null;
+  }
+  else if (st === 'plasma') {
+    const { x: sx, y: sy } = getPos(srcIdx);
+    const chainFwd = [];
+    if (pieces[ni]) {
+      chainFwd.push(ni);
+      let cx = getPos(ni).x, cy = getPos(ni).y;
+      while (true) { cx+=dx; cy+=dy; const next=getIdx(cx,cy); if(next===-1||!pieces[next])break; chainFwd.push(next); }
+    }
+    const chainBwd = [];
+    let bx = sx-dx, by = sy-dy;
+    while (true) { const next=getIdx(bx,by); if(next===-1||!pieces[next])break; chainBwd.push(next); bx-=dx; by-=dy; }
+    if (chainFwd.length > 0) {
+      const lp = getPos(chainFwd[chainFwd.length-1]);
+      if (getIdx(lp.x+dx, lp.y+dy) === -1) { showToast('Plasma bloqué !'); return false; }
+    }
+    for (let i = chainFwd.length-1; i >= 0; i--) { const from=chainFwd[i],fp=getPos(from); const toI=getIdx(fp.x+dx,fp.y+dy); pieces[toI]=pieces[from]; pieces[from]=null; }
+    pieces[ni] = pieces[srcIdx]; pieces[srcIdx] = null;
+    for (let i = 0; i < chainBwd.length; i++) { const from=chainBwd[i],fp=getPos(from); const toI=getIdx(fp.x+dx,fp.y+dy); pieces[toI]=pieces[from]; pieces[from]=null; }
+  }
+  else {
+    const tmp = pieces[srcIdx]; pieces[srcIdx] = pieces[ni]; pieces[ni] = tmp;
+  }
+  return true;
+}
+
+// === RENDU ===
+function renderDominoSVG(p) {
+  const icon = ICONS[p.icon];
+  let svg = '<svg viewBox="0 0 90 90">';
+  svg += '<line class="separator" x1="0" y1="45" x2="90" y2="45"/>';
+  // Face1 (haut)
+  svg += '<g>' + icon.f1 + '</g>';
+  // Tip dot face1
+  svg += '<circle class="tip" cx="45" cy="' + icon.tipY1 + '" r="3"/>';
+  // Face2 (bas, décalée de 45)
+  svg += '<g transform="translate(0,45)">' + icon.f2 + '</g>';
+  svg += '</svg>';
+  return svg;
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  let count = 0;
+  for (let i = 0; i < TOTAL; i++) {
+    const col = i % COLS, row = Math.floor(i / COLS);
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.style.left = (col * CT) + 'px';
+    cell.style.top = (row * CT) + 'px';
+    const sq = document.createElement('div');
+    sq.dataset.index = i;
+    if (pieces[i]) {
+      count++;
+      const p = pieces[i];
+      sq.className = 'square ' + p.state;
+      sq.innerHTML = renderDominoSVG(p);
+      if (p.rotation) sq.style.transform = 'rotate(' + p.rotation + 'deg)';
+    } else {
+      sq.className = 'square empty';
+    }
+    cell.appendChild(sq);
+    grid.appendChild(cell);
+  }
+  document.getElementById('stat-pieces').textContent = count;
+  document.getElementById('stat-moves').textContent = moves;
+}
+
+// =============================================
+// =============================================
+// ENGRENAGE v7 bidirectionnel
+// BFS depuis la pièce cliquée, alternance du sens
+// Animation 2 phases : compress + rotate
+// =============================================
+function getDir(fromIdx, toIdx) {
+  var fp = getPos(fromIdx), tp = getPos(toIdx);
+  if (tp.y < fp.y) return [0, -4];
+  if (tp.y > fp.y) return [0,  4];
+  if (tp.x < fp.x) return [-4, 0];
+  if (tp.x > fp.x) return [ 4, 0];
+  return [0, 0];
+}
+
+function doGearClick(clickedIdx, baseDelta) {
+  if (!pieces[clickedIdx]) return 0;
+
+  var plan = [];
+  var visited = new Set();
+  var queue = [{ idx: clickedIdx, sens: 1, depth: 0, fromIdx: clickedIdx }];
+  visited.add(clickedIdx);
+
+  while (queue.length > 0) {
+    var cur = queue.shift();
+    plan.push(cur);
+    var neighbors = cardinalNeighbors(cur.idx);
+    for (var n = 0; n < neighbors.length; n++) {
+      var ni = neighbors[n];
+      if (!visited.has(ni) && pieces[ni]) {
+        visited.add(ni);
+        queue.push({ idx: ni, sens: -cur.sens, depth: cur.depth + 1, fromIdx: cur.idx });
+      }
+    }
+  }
+
+  // Mise à jour logique immédiate
+  for (var p = 0; p < plan.length; p++) {
+    pieces[plan[p].idx].rotation = (pieces[plan[p].idx].rotation || 0) + plan[p].sens * baseDelta;
+  }
+
+  // Animation sur le .square (pas la cell) pour ne pas interférer avec left/top
+  for (var p = 0; p < plan.length; p++) {
+    (function(item) {
+      var sq = document.querySelector('[data-index="'+item.idx+'"]');
+      if (!sq) return;
+
+      var targetAngle = pieces[item.idx].rotation;
+      sq.style.transition = 'transform 0.25s cubic-bezier(0.34, 1.3, 0.64, 1)';
+      sq.style.transform = 'rotate('+targetAngle+'deg)';
+    })(plan[p]);
+  }
+
+  document.getElementById('stat-moves').textContent = moves;
+  return 300;
+}
+
+// =============================================
+// INTERACTION : TAP bidirectionnel + SWIPE
+// Tap moitié gauche = -90°, moitié droite = +90°
+// Beaucoup plus réactif (0.25s)
+// =============================================
+let busy = false; // bloque uniquement swipe et fusion
+let gearBusy = false; // ne bloque PAS les taps — juste pour fusion check
+let gearTimer = null;
+let pointerDown = null;
+
+function onDown(e) {
+  if (busy) return;
+  const sq = e.target.closest('.square');
+  if (!sq || sq.classList.contains('empty')) return;
+  const idx = parseInt(sq.dataset.index);
+  if (isNaN(idx) || !pieces[idx]) return;
+  e.preventDefault();
+
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  const rect = sq.getBoundingClientRect();
+  const localX = cx - rect.left;
+
+  pointerDown = { idx, x: cx, y: cy, time: Date.now(), moved: false, done: false, localX, cellW: rect.width };
+}
+
+function onMove(e) {
+  if (!pointerDown || pointerDown.done || busy) return;
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  const dx = cx - pointerDown.x;
+  const dy = cy - pointerDown.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
+  if (dist > 15) {
+    pointerDown.moved = true;
+    e.preventDefault();
+
+    if (!canMove(pieces[pointerDown.idx])) {
+      pointerDown.done = true; pointerDown = null; return;
+    }
+
+    const targets = validSwapTargets(pointerDown.idx);
+    let best = null, bestS = -1;
+    for (const t of targets) {
+      const s = t.dx * dx + t.dy * dy;
+      if (s > bestS) { bestS = s; best = t; }
+    }
+
+    if (!best || bestS < 5) {
+      pointerDown.done = true; pointerDown = null; return;
+    }
+
+    pointerDown.done = true;
+    busy = true;
+
+    var srcIdx = pointerDown.idx;
+    var ni = best.ni, bdx = best.dx, bdy = best.dy;
+    var srcCell = document.querySelector('[data-index="'+srcIdx+'"]');
+    if (srcCell) srcCell = srcCell.parentElement;
+    var dstCell = document.querySelector('[data-index="'+ni+'"]');
+    if (dstCell) dstCell = dstCell.parentElement;
+
+    var sp = getPos(srcIdx), dp = getPos(ni);
+    var slideDur = 250;
+    var trans = 'left '+slideDur+'ms cubic-bezier(0.4,0,0.2,1), top '+slideDur+'ms cubic-bezier(0.4,0,0.2,1)';
+
+    // Slide source vers destination
+    if (srcCell) {
+      srcCell.style.transition = trans;
+      srcCell.style.zIndex = '10';
+      srcCell.style.left = (dp.x * CT) + 'px';
+      srcCell.style.top = (dp.y * CT) + 'px';
+    }
+    var srcState = pieces[srcIdx] ? pieces[srcIdx].state : '';
+
+    // Swap standard : slide destination vers source
+    if (srcState !== 'supernovae' && srcState !== 'plasma' && dstCell && pieces[ni]) {
+      dstCell.style.transition = trans;
+      dstCell.style.left = (sp.x * CT) + 'px';
+      dstCell.style.top = (sp.y * CT) + 'px';
+    }
+
+    // Nova : slide la chaîne poussée
+    if (srcState === 'supernovae' && pieces[ni]) {
+      var chain = [ni]; var cx2 = dp.x, cy2 = dp.y;
+      while (true) { cx2+=bdx; cy2+=bdy; var next=getIdx(cx2,cy2); if(next===-1||!pieces[next])break; chain.push(next); }
+      for (var ci = 0; ci < chain.length; ci++) {
+        var cc = document.querySelector('[data-index="'+chain[ci]+'"]');
+        if (cc) cc = cc.parentElement;
+        if (cc) {
+          var cp = getPos(chain[ci]);
+          cc.style.transition = trans;
+          cc.style.left = ((cp.x+bdx) * CT) + 'px';
+          cc.style.top = ((cp.y+bdy) * CT) + 'px';
         }
+      }
+    }
 
-        // ─── Rendu ───
-        // Le sigle k est affiché à y = k*SLOT - bandY
-        // À bandY = topIdx * SLOT : sigle topIdx en haut (y=0), sigle topIdx+1 en bas (y=SLOT). Médiane au centre.
-        const SLOT_HEIGHT = SLOT;
-        const ICON_HEIGHT = ICON_AREA;
+    // Plasma : slide chaîne avant + arrière
+    if (srcState === 'plasma') {
+      var chainFwd = [], chainBwd = [];
+      if (pieces[ni]) {
+        chainFwd.push(ni); var cx2=dp.x,cy2=dp.y;
+        while(true){cx2+=bdx;cy2+=bdy;var next=getIdx(cx2,cy2);if(next===-1||!pieces[next])break;chainFwd.push(next);}
+      }
+      var bx=sp.x-bdx,by=sp.y-bdy;
+      while(true){var next=getIdx(bx,by);if(next===-1||!pieces[next])break;chainBwd.push(next);bx-=bdx;by-=bdy;}
+      for (var ci=0;ci<chainFwd.length;ci++){
+        var cc=document.querySelector('[data-index="'+chainFwd[ci]+'"]');if(cc)cc=cc.parentElement;
+        if(cc){var cp=getPos(chainFwd[ci]);cc.style.transition=trans;cc.style.left=((cp.x+bdx)*CT)+'px';cc.style.top=((cp.y+bdy)*CT)+'px';}
+      }
+      for (var ci=0;ci<chainBwd.length;ci++){
+        var cc=document.querySelector('[data-index="'+chainBwd[ci]+'"]');if(cc)cc=cc.parentElement;
+        if(cc){var cp=getPos(chainBwd[ci]);cc.style.transition=trans;cc.style.left=((cp.x+bdx)*CT)+'px';cc.style.top=((cp.y+bdy)*CT)+'px';}
+      }
+    }
 
-        function renderFrame() {
-            // Quels sigles dessiner ? On veut couvrir y ∈ [-SLOT, 90+SLOT]
-            const kMin = Math.floor((bandY - SLOT) / SLOT);
-            const kMax = Math.ceil((bandY + 90 + SLOT) / SLOT);
+    pointerDown = null;
+    setTimeout(function() {
+      var ok = executeSwap(srcIdx, ni, bdx, bdy);
+      if (ok) moves++;
+      render();
+      busy = false;
+      setTimeout(checkFusions, 100);
+    }, slideDur + 20);
+  }
+}
 
-            let content = `<defs><clipPath id="vis"><rect x="0" y="0" width="90" height="90"/></clipPath></defs>`;
-            content += `<g clip-path="url(#vis)">`;
+function onUp(e) {
+  if (!pointerDown || pointerDown.done) { pointerDown = null; return; }
+  // Si busy (swap/fusion en cours), ignorer seulement les swipes, pas les taps
+  if (busy && pointerDown.moved) { pointerDown = null; return; }
 
-            for (let k = kMin; k <= kMax; k++) {
-                const slotTop = k * SLOT - bandY;
-                const slotCenter = slotTop + SLOT / 2;
-                const iconY = slotCenter - ICON_AREA / 2;
+  const elapsed = Date.now() - pointerDown.time;
 
-                if (slotTop > 95 || slotTop + SLOT < -5) continue;
+  // TAP → engrenage BFS bidirectionnel — JAMAIS bloqué, empilable
+  if (!pointerDown.moved && elapsed < 250) {
+    const idx = pointerDown.idx;
+    const clickedRight = pointerDown.localX > (pointerDown.cellW / 2);
+    pointerDown = null;
 
-                const distFromCenter = Math.abs(slotCenter - 45) / SLOT;
-                const opacity = Math.max(0.15, 1 - distFromCenter * 0.4);
+    if (!pieces[idx]) return;
 
-                content += `<g transform="translate(0, ${iconY.toFixed(2)})" opacity="${opacity.toFixed(2)}">
-                    ${applyStyle(ICONS[wrap(k)])}
-                </g>`;
+    moves++;
 
-                // Médiane en bas du slot k
-                const sepY = slotTop + SLOT;
-                if (sepY > -2 && sepY < 92) {
-                    const sepDist = Math.abs(sepY - 45) / 45;
-                    const sepOpacity = Math.max(0.08, 0.3 - sepDist * 0.2);
-                    content += `<line x1="8" y1="${sepY.toFixed(2)}" x2="82" y2="${sepY.toFixed(2)}" 
-                        stroke="rgba(180,180,190,${sepOpacity.toFixed(2)})" stroke-width="0.8"/>`;
-                }
-            }
+    const baseDelta = clickedRight ? 90 : -90;
+    doGearClick(idx, baseDelta);
 
-            content += `</g>`;
-            svg.innerHTML = content;
-        }
+    // Debounce fusion check : attendre 400ms après le dernier tap
+    if (gearTimer) clearTimeout(gearTimer);
+    gearTimer = setTimeout(function() {
+      gearTimer = null;
+      checkFusions();
+    }, 400);
+  } else {
+    pointerDown = null;
+  }
+}
 
-        function applyStyle(iconSvg) {
-            return iconSvg
-                .replace(/<(path|line|rect|polygon)/g, '<$1 stroke="rgba(180,180,190,0.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"')
-                .replace(/<circle cx/g, '<circle fill="rgba(180,180,190,0.55)" stroke="none" cx');
-        }
+// === TOAST ===
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 1200);
+}
 
-        function updateCounter() {
-            const t = wrap(topIdx);
-            const b = wrap(topIdx + 1);
-            counterEl.textContent = `${t + 1}·${b + 1} / ${TOTAL}`;
-        }
+// === LÉGENDE ===
+function buildLegend() {
+  var items = [
+    { label:'White', dir:'tap=↻', color:'rgba(180,180,190,0.5)' },
+    { label:'Silver', dir:'← →', color:'#22d3ee' },
+    { label:'Gold', dir:'↗↘↙↖', color:'#ffd700' },
+    { label:'Emerald', dir:'↑ ↓', color:'#34d399' },
+    { label:'Cosmic', dir:'8dir', color:'#c4b5fd' },
+    { label:'Nova', dir:'push', color:'#ffa014' },
+    { label:'Plasma', dir:'±mag', color:'#ff2060' },
+  ];
+  document.getElementById('legend').innerHTML = items.map(function(i) {
+    return '<div class="legend-item"><div class="legend-dot" style="background:'+i.color+'"></div>'+i.label+' <span style="color:rgba(220,220,235,0.6);font-size:0.5rem">'+i.dir+'</span></div>';
+  }).join('');
+}
 
-        // ─── Animation ───
-        let animating = false;
+// === EVENTS ===
+document.addEventListener('mousedown', onDown);
+document.addEventListener('mousemove', onMove);
+document.addEventListener('mouseup', onUp);
+document.addEventListener('touchstart', onDown, { passive: false });
+document.addEventListener('touchmove', onMove, { passive: false });
+document.addEventListener('touchend', onUp);
 
-        function animateBandY(targetBandY, duration) {
-            if (animating) return;
-            animating = true;
-            const startBandY = bandY;
-            const delta = targetBandY - startBandY;
-            const startTime = performance.now();
-
-            function tick(now) {
-                const elapsed = now - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const ease = 1 - Math.pow(1 - progress, 3);
-                bandY = startBandY + delta * ease;
-                renderFrame();
-
-                if (progress < 1) {
-                    requestAnimationFrame(tick);
-                } else {
-                    bandY = targetBandY;          // garantie : pile sur la cible
-                    topIdx = Math.round(bandY / SLOT);
-                    renderFrame();
-                    updateCounter();
-                    animating = false;
-                }
-            }
-
-            requestAnimationFrame(tick);
-        }
-
-        function animateScroll(direction) {
-            if (animating) return;
-            const targetTopIdx = topIdx + (direction === 'up' ? 1 : -1);
-            animateBandY(targetTopIdx * SLOT, 280);
-        }
-
-        // ─── Drag + clic ───
-        let startX = 0, startY = 0;
-        let bandYAtDragStart = 0;
-        let isDragging = false;
-        let totalMovement = 0; // pour distinguer clic vs drag
-        const CLICK_THRESHOLD = 5; // px
-
-        domino.addEventListener('pointerdown', (e) => {
-            if (animating) return;
-            startX = e.clientX;
-            startY = e.clientY;
-            bandYAtDragStart = bandY;
-            isDragging = true;
-            totalMovement = 0;
-            domino.setPointerCapture(e.pointerId);
-        });
-
-        domino.addEventListener('pointermove', (e) => {
-            if (!isDragging || animating) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            totalMovement = Math.max(totalMovement, Math.hypot(dx, dy));
-
-            const delta = getDragDelta(dx, dy);
-            // delta < 0 = avancer (bandY augmente)
-            bandY = bandYAtDragStart - delta * VISUAL_RATIO;
-
-            const drift = bandY - bandYAtDragStart;
-            if (drift > 2) {
-                domino.classList.add('swiping-up');
-                domino.classList.remove('swiping-down');
-            } else if (drift < -2) {
-                domino.classList.add('swiping-down');
-                domino.classList.remove('swiping-up');
-            } else {
-                domino.classList.remove('swiping-up', 'swiping-down');
-            }
-
-            renderFrame();
-        });
-
-        domino.addEventListener('pointerup', (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-            domino.classList.remove('swiping-up', 'swiping-down');
-
-            if (totalMovement < CLICK_THRESHOLD) {
-                // Clic : rotation +90°
-                rotation += 90;
-                domino.style.transform = `rotate(${rotation}deg)`;
-            } else {
-                snapToNearest();
-            }
-        });
-
-        domino.addEventListener('pointercancel', () => {
-            if (!isDragging) return;
-            isDragging = false;
-            domino.classList.remove('swiping-up', 'swiping-down');
-            snapToNearest();
-        });
-
-        function snapToNearest() {
-            // Le SLOT le plus proche en termes de bandY
-            const targetTopIdx = Math.round(bandY / SLOT);
-            const targetBandY = targetTopIdx * SLOT;
-            const distance = Math.abs(targetBandY - bandY);
-
-            if (distance < 0.5) {
-                bandY = targetBandY;
-                topIdx = targetTopIdx;
-                renderFrame();
-                updateCounter();
-                return;
-            }
-
-            // Durée proportionnelle, plus rapide quand on est presque au snap
-            const duration = Math.max(80, 220 * (distance / SLOT));
-            animateBandY(targetBandY, duration);
-        }
-
-        // Scroll wheel
-        domino.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            if (e.deltaY > 0) animateScroll('up');
-            else if (e.deltaY < 0) animateScroll('down');
-        }, { passive: false });
-
-        // ─── Init ───
-        renderFrame();
-        updateCounter();
-    </script>
+// === INIT ===
+resetAll();
+buildLegend();
+</script>
 </body>
 </html>
